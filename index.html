@@ -31,7 +31,6 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
     // and may or may not have played yet. {note, time}
     var timerWorker = null; // The Web Worker used to fire timer messages
 
-    var nextTime = 0;
 
 
     // var sequenceIndex = 0;
@@ -47,20 +46,64 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
 
     function seq(name){
 
-      var foundSequence = _.find(sequences, function(item){
-        return item.name === name;
-      })[0];
-
+      var foundSequence = _.findWhere(sequences, { name: name});
       if (foundSequence) return foundSequence;
 
       var sequence = function(seqName){
         this.name = seqName;
+        this.notesIndex = 0;
+        this.nextTime = 0;
+        this.pattern = [];
+        this.noteValues = [];
+        this.patternIndex = 0;
       };
 
       sequence.prototype = {
         pat: function(stepLengths){
+          this.pattern = stepLengths;
+          return this;
+        },
+        notes: function(notesArray){
+          this.noteValues = notesArray;
+          return this;
+        },
+        stop: function(){
+          this.patternIndex = 0;
+          this.nextTime = 0;
+        },
+        scheduleNote: function(time) {
 
+          if (time < this.nextTime) return;
+
+          var amp = audioContext.createGain();
+          amp.gain.value = 0
+          amp.gain.setTargetAtTime(0.3, time, 0.001)
+          amp.gain.setTargetAtTime(0, time + noteLength*2, 0.2);
+
+          amp.connect(audioContext.destination);
+
+          var osc = audioContext.createOscillator();
+          osc.type = "triangle";
+          osc.connect(amp);
+          osc.frequency.value = 440;
+          osc.detune.value = this.noteValues[this.notesIndex] * 100;
+          osc.start(time);
+          osc.stop(time + noteLength*20);
+
+          var secondsPerBeat = 60.0 / tempo;
+          this.nextTime = time + (this.pattern[this.patternIndex] * 0.25 * secondsPerBeat);
+
+          this.patternIndex++;
+          if (this.patternIndex >= this.pattern.length) {
+            this.patternIndex = 0;
+          }
+
+          this.notesIndex++;
+          if (this.notesIndex >= this.noteValues.length){
+            this.notesIndex = 0;
+          }
         }
+
       };
 
       var newSequence = new sequence(name);
@@ -76,40 +119,13 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
       nextStepTime += 0.25 * secondsPerBeat; // Add beat length to last beat time
     }
 
-    function scheduleNote(time) {
-
-      if (time < nextTime) return;
-
-      var amp = audioContext.createGain()
-      amp.connect(audioContext.destination)
-
-      var release = 0.25;
-      amp.gain.value = 0;
-      amp.gain.setTargetAtTime(0.4, time, 0.05);
-      amp.gain.setTargetAtTime(0, time + noteLength, release);
-
-      var osc = audioContext.createOscillator();
-      osc.connect(amp);
-      osc.frequency.value = sequence[sequenceIndex].frequency;
-
-      osc.start(time);
-      osc.stop(time + noteLength + release*3);
-
-      var secondsPerBeat = 60.0 / tempo;
-      nextTime = time + (sequence[sequenceIndex].steps * 0.25 * secondsPerBeat);
-
-      sequenceIndex++;
-      if (sequenceIndex >= sequence.length) {
-        sequenceIndex = 0;
-      }
-
-    }
-
     function scheduler() {
       // while there are notes that will need to play before the next interval,
       // schedule them and advance the pointer.
       while (nextStepTime < audioContext.currentTime + scheduleAheadTime) {
-        scheduleNote(nextStepTime);
+        for (var i = 0; i < sequences.length; i++){
+          sequences[i].scheduleNote(nextStepTime);
+        }
         nextStep();
       }
     }
@@ -118,10 +134,8 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
       isPlaying = !isPlaying;
 
       if (isPlaying) { // start playing
-        // current16thNote = 0;
-        sequenceIndex = 0;
+        _.each(sequences, function(item){item.stop()});
         nextStepTime = audioContext.currentTime;
-        nextTime = 0;
         timerWorker.postMessage("start");
         return "stop";
       } else {
@@ -140,7 +154,6 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
 
       timerWorker.onmessage = function(e) {
         if (e.data == "tick") {
-          // console.log("tick!");
           scheduler();
         } else {
           console.log("message: " + e.data);
@@ -149,6 +162,10 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
       timerWorker.postMessage({
         "interval": lookahead
       });
+
+      seq('blah').pat([1,1,2,1,4,1,1,4,2,1,4,1]).notes([2,4,5,0]);
+      seq('blah2').pat([4,1,1,4,1]).notes([-2,-4,-5,-12]);
+      seq('blah3').pat([7,7,9,4,7]).notes([12,14,19,17,9]);
 
     }
 
