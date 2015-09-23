@@ -1,0 +1,162 @@
+<html>
+
+<body>
+
+  <p>
+    <button onclick="play()">play</button>
+  </p>
+
+  <pre><code>
+// ideas
+seq('bass').voice(voices.acid).scale(scales.major, [up|down|random]).range(-12,12).pat(1,1,2,1,4,2,1);
+seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12).pat(1,2,2,4,4);
+</code></pre>
+
+  <script src="lodash.min.js"></script>
+
+  <script>
+    var audioContext = null;
+    var isPlaying = false; // Are we currently playing?
+    var startTime; // The start time of the entire sequence.
+    var current16thNote; // What note is currently last scheduled?
+    var tempo = 120.0; // tempo (in beats per minute)
+    var lookahead = 25.0; // How frequently to call scheduling function
+    //(in milliseconds)
+    var scheduleAheadTime = 0.1; // How far ahead to schedule audio (sec)
+    // This is calculated from lookahead, and overlaps
+    // with next interval (in case the timer is late)
+    var nextStepTime = 0.0; // when the next note is due.
+    var noteResolution = 0; // 0 == 16th, 1 == 8th, 2 == quarter note
+    var noteLength = 0.05; // length of "beep" (in seconds)
+    // and may or may not have played yet. {note, time}
+    var timerWorker = null; // The Web Worker used to fire timer messages
+
+    var nextTime = 0;
+
+
+    // var sequenceIndex = 0;
+    // var sequence = [
+    //   { frequency: 440, steps: 4},
+    //   { frequency: 550, steps: 2},
+    //   { frequency: 660, steps: 2},
+    //   { frequency: 220, steps: 4},
+    //   { frequency: 880, steps: 2},
+    // ];
+
+    var sequences = [];
+
+    function seq(name){
+
+      var foundSequence = _.find(sequences, function(item){
+        return item.name === name;
+      })[0];
+
+      if (foundSequence) return foundSequence;
+
+      var sequence = function(seqName){
+        this.name = seqName;
+      };
+
+      sequence.prototype = {
+        pat: function(stepLengths){
+
+        }
+      };
+
+      var newSequence = new sequence(name);
+      sequences.push(newSequence);
+      return newSequence;
+    }
+
+    function nextStep() {
+      // Advance current note and time by a 16th note...
+      var secondsPerBeat = 60.0 / tempo; // Notice this picks up the CURRENT
+      // tempo value to calculate beat length.
+
+      nextStepTime += 0.25 * secondsPerBeat; // Add beat length to last beat time
+    }
+
+    function scheduleNote(time) {
+
+      if (time < nextTime) return;
+
+      var amp = audioContext.createGain()
+      amp.connect(audioContext.destination)
+
+      var release = 0.25;
+      amp.gain.value = 0;
+      amp.gain.setTargetAtTime(0.4, time, 0.05);
+      amp.gain.setTargetAtTime(0, time + noteLength, release);
+
+      var osc = audioContext.createOscillator();
+      osc.connect(amp);
+      osc.frequency.value = sequence[sequenceIndex].frequency;
+
+      osc.start(time);
+      osc.stop(time + noteLength + release*3);
+
+      var secondsPerBeat = 60.0 / tempo;
+      nextTime = time + (sequence[sequenceIndex].steps * 0.25 * secondsPerBeat);
+
+      sequenceIndex++;
+      if (sequenceIndex >= sequence.length) {
+        sequenceIndex = 0;
+      }
+
+    }
+
+    function scheduler() {
+      // while there are notes that will need to play before the next interval,
+      // schedule them and advance the pointer.
+      while (nextStepTime < audioContext.currentTime + scheduleAheadTime) {
+        scheduleNote(nextStepTime);
+        nextStep();
+      }
+    }
+
+    function play() {
+      isPlaying = !isPlaying;
+
+      if (isPlaying) { // start playing
+        // current16thNote = 0;
+        sequenceIndex = 0;
+        nextStepTime = audioContext.currentTime;
+        nextTime = 0;
+        timerWorker.postMessage("start");
+        return "stop";
+      } else {
+        timerWorker.postMessage("stop");
+        return "play";
+      }
+    }
+
+    function init() {
+
+      audioContext = new AudioContext();
+
+      // if we wanted to load audio files, etc., this is where we should do it.
+
+      timerWorker = new Worker("metronomeworker.js");
+
+      timerWorker.onmessage = function(e) {
+        if (e.data == "tick") {
+          // console.log("tick!");
+          scheduler();
+        } else {
+          console.log("message: " + e.data);
+        }
+      };
+      timerWorker.postMessage({
+        "interval": lookahead
+      });
+
+    }
+
+    window.addEventListener("load", init);
+  </script>
+
+
+
+</body>
+
+</html>
