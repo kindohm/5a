@@ -18,7 +18,7 @@ Then type:
 play();
 ```
 
-_Select this code_, then press 'Ctrl-Enter'. You should now hear a sequence
+_Select this code_, then press `Ctrl-Enter`. You should now hear a sequence
 of notes. To stop:
 
 ```
