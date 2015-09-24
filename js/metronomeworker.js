@@ -1,3 +1,6 @@
+// this code was sourced from:
+// https://github.com/cwilso/metronome
+
 var timerID=null;
 var interval=100;
 

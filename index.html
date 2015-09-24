@@ -23,9 +23,9 @@
 
   <div id="editor">seq('blah').pat([1,1,2,1,4,1,1,4,2,1,4,1]).notes([2,4,5,0]);</div>
 
-  <script src="lodash.min.js"></script>
+  <script src="vendor/lodash/lodash.min.js"></script>
 
-  <script src="/src-min/ace.js" type="text/javascript" charset="utf-8"></script>
+  <script src="/vendor/ace/ace.js" type="text/javascript" charset="utf-8"></script>
   <script>
     var editor = ace.edit("editor");
     editor.setTheme("ace/theme/tomorrow_night");
@@ -184,7 +184,7 @@
 
       // if we wanted to load audio files, etc., this is where we should do it.
 
-      timerWorker = new Worker("metronomeworker.js");
+      timerWorker = new Worker("js/metronomeworker.js");
 
       timerWorker.onmessage = function(e) {
         if (e.data == "tick") {
