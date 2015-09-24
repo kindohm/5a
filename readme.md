@@ -26,3 +26,6 @@ stop();
 ```
 
 Currently, you _must_ select the code you want to eval.
+
+Sequence timing and scheduling is based off of this article:
+http://www.html5rocks.com/en/tutorials/audio/scheduling/
