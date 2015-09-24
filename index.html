@@ -1,20 +1,50 @@
 <html>
 
+<head>
+  <style type="text/css" media="screen">
+    body {
+      background-color: #272822;
+      color: #F8F8F2;
+      font-family: monospace;
+    }
+
+    #editor {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      font-size: 1.2em;
+    }
+  </style>
+</head>
+
 <body>
 
-  <p>
-    <button onclick="play()">play</button>
-  </p>
-
-  <pre><code>
-// ideas
-seq('bass').voice(voices.acid).scale(scales.major, [up|down|random]).range(-12,12).pat(1,1,2,1,4,2,1);
-seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12).pat(1,2,2,4,4);
-</code></pre>
+  <div id="editor">seq('blah').pat([1,1,2,1,4,1,1,4,2,1,4,1]).notes([2,4,5,0]);</div>
 
   <script src="lodash.min.js"></script>
 
+  <script src="/src-min/ace.js" type="text/javascript" charset="utf-8"></script>
   <script>
+    var editor = ace.edit("editor");
+    editor.setTheme("ace/theme/tomorrow_night");
+    editor.getSession().setMode("ace/mode/javascript");
+
+    editor.commands.addCommand({
+      name: 'eval',
+      bindKey: {
+        win: 'Ctrl-Enter',
+        mac: 'Command-Enter'
+      },
+      exec: function(editor) {
+        var selection = editor.getSelectionRange();
+        eval(editor.session.getTextRange(editor.getSelectionRange()));
+      },
+      readOnly: true // false if this command should not apply in readOnly mode
+    });
+
+
     var audioContext = null;
     var isPlaying = false; // Are we currently playing?
     var startTime; // The start time of the entire sequence.
@@ -31,25 +61,21 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
     // and may or may not have played yet. {note, time}
     var timerWorker = null; // The Web Worker used to fire timer messages
 
-
-
-    // var sequenceIndex = 0;
-    // var sequence = [
-    //   { frequency: 440, steps: 4},
-    //   { frequency: 550, steps: 2},
-    //   { frequency: 660, steps: 2},
-    //   { frequency: 220, steps: 4},
-    //   { frequency: 880, steps: 2},
-    // ];
-
     var sequences = [];
+    window.seq = seq;
 
-    function seq(name){
+    function seq(name) {
 
-      var foundSequence = _.findWhere(sequences, { name: name});
+      console.log('YESSS');
+
+      var foundSequence = _.findWhere(sequences, {
+        name: name
+      });
       if (foundSequence) return foundSequence;
 
-      var sequence = function(seqName){
+      console.log('creating new seq');
+
+      var sequence = function(seqName) {
         this.name = seqName;
         this.notesIndex = 0;
         this.nextTime = 0;
@@ -59,15 +85,15 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
       };
 
       sequence.prototype = {
-        pat: function(stepLengths){
+        pat: function(stepLengths) {
           this.pattern = stepLengths;
           return this;
         },
-        notes: function(notesArray){
+        notes: function(notesArray) {
           this.noteValues = notesArray;
           return this;
         },
-        stop: function(){
+        stop: function() {
           this.patternIndex = 0;
           this.nextTime = 0;
         },
@@ -78,7 +104,7 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
           var amp = audioContext.createGain();
           amp.gain.value = 0
           amp.gain.setTargetAtTime(0.3, time, 0.001)
-          amp.gain.setTargetAtTime(0, time + noteLength*2, 0.2);
+          amp.gain.setTargetAtTime(0, time + noteLength * 2, 0.2);
 
           amp.connect(audioContext.destination);
 
@@ -88,10 +114,11 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
           osc.frequency.value = 440;
           osc.detune.value = this.noteValues[this.notesIndex] * 100;
           osc.start(time);
-          osc.stop(time + noteLength*20);
+          osc.stop(time + noteLength * 20);
 
           var secondsPerBeat = 60.0 / tempo;
-          this.nextTime = time + (this.pattern[this.patternIndex] * 0.25 * secondsPerBeat);
+          this.nextTime = time + (this.pattern[this.patternIndex] *
+            0.25 * secondsPerBeat);
 
           this.patternIndex++;
           if (this.patternIndex >= this.pattern.length) {
@@ -99,7 +126,7 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
           }
 
           this.notesIndex++;
-          if (this.notesIndex >= this.noteValues.length){
+          if (this.notesIndex >= this.noteValues.length) {
             this.notesIndex = 0;
           }
         }
@@ -122,8 +149,9 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
     function scheduler() {
       // while there are notes that will need to play before the next interval,
       // schedule them and advance the pointer.
-      while (nextStepTime < audioContext.currentTime + scheduleAheadTime) {
-        for (var i = 0; i < sequences.length; i++){
+      while (nextStepTime < audioContext.currentTime +
+        scheduleAheadTime) {
+        for (var i = 0; i < sequences.length; i++) {
           sequences[i].scheduleNote(nextStepTime);
         }
         nextStep();
@@ -134,7 +162,9 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
       isPlaying = !isPlaying;
 
       if (isPlaying) { // start playing
-        _.each(sequences, function(item){item.stop()});
+        _.each(sequences, function(item) {
+          item.stop()
+        });
         nextStepTime = audioContext.currentTime;
         timerWorker.postMessage("start");
         return "stop";
@@ -142,6 +172,10 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
         timerWorker.postMessage("stop");
         return "play";
       }
+    }
+
+    function stop() {
+      if (isPlaying) play();
     }
 
     function init() {
@@ -163,9 +197,9 @@ seq('mel').voice(voices.keys).scale(scales.major, [up|down|random]).range(-12,12
         "interval": lookahead
       });
 
-      seq('blah').pat([1,1,2,1,4,1,1,4,2,1,4,1]).notes([2,4,5,0]);
-      seq('blah2').pat([4,1,1,4,1]).notes([-2,-4,-5,-12]);
-      seq('blah3').pat([7,7,9,4,7]).notes([12,14,19,17,9]);
+      // seq('blah').pat([1,1,2,1,4,1,1,4,2,1,4,1]).notes([2,4,5,0]);
+      // seq('blah2').pat([4,1,1,4,1]).notes([-2,-4,-5,-12]);
+      // seq('blah3').pat([7,7,9,4,7]).notes([12,14,19,17,9]);
 
     }
 
